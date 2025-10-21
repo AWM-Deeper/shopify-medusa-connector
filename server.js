@@ -32,8 +32,8 @@ const shopify = shopifyApi({
 // Routes
 app.get('/', (req, res) => {
   res.send(`
-    <h1>✅ Shopify-Medusa Connector</h1>
-    <p><a href="/auth/begin?shop=your-test-store.myshopify.com">Install App</a></p>
+    ✅ Shopify-Medusa Connector
+    <a href="/auth/begin?shop=your-shop.myshopify.com">Install App</a>
   `);
 });
 
@@ -46,19 +46,22 @@ app.get('/auth/begin', async (req, res) => {
   }
 
   try {
-    // Start OAuth flow
-    const authRoute = await shopify.auth.begin({
+    // shopify.auth.begin() handles the redirect internally via rawResponse
+    // It does NOT return an authRoute - it sends the response itself
+    await shopify.auth.begin({
       shop,
       callbackPath: '/auth/callback',
       isOnline: false,
       rawRequest: req,
       rawResponse: res,
     });
-    
-    res.redirect(authRoute);
+    // No res.redirect() needed - response already sent by shopify.auth.begin()
   } catch (error) {
     console.error('Auth begin error:', error);
-    res.status(500).send('Authentication failed');
+    // Only send error response if headers haven't been sent yet
+    if (!res.headersSent) {
+      res.status(500).send('Authentication failed');
+    }
   }
 });
 
@@ -68,12 +71,19 @@ app.get('/auth/callback', async (req, res) => {
       rawRequest: req,
       rawResponse: res,
     });
-
+    
     console.log('✅ Access token:', callback.session.accessToken);
-    res.send('Authentication successful! You can close this window.');
+    
+    // Only send success response if headers haven't been sent yet
+    if (!res.headersSent) {
+      res.send('Authentication successful! You can close this window.');
+    }
   } catch (error) {
     console.error('Auth callback error:', error);
-    res.status(500).send('Authentication callback failed');
+    // Only send error response if headers haven't been sent yet
+    if (!res.headersSent) {
+      res.status(500).send('Authentication callback failed');
+    }
   }
 });
 
