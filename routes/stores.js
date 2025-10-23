@@ -1,6 +1,7 @@
-const express = require('express');
+import express from 'express';
+import { PrismaClient } from '@prisma/client';
+
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 // GET /api/stores - List all stores
@@ -108,4 +109,4 @@ router.post('/api/sync/:storeId', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;
