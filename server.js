@@ -5,6 +5,7 @@ import { shopifyApi, ApiVersion } from '@shopify/shopify-api';
 import '@shopify/shopify-api/adapters/node';
 import cors from 'cors';
 import helmet from 'helmet';
+import storesRoutes from './routes/stores.js';
 
 const app = express();
 
@@ -29,11 +30,14 @@ const shopify = shopifyApi({
   isEmbeddedApp: false,
 });
 
+// Mount API routes
+app.use(storesRoutes);
+
 // Routes
 app.get('/', (req, res) => {
   res.send(`
     ✅ Shopify-Medusa Connector
-    <a href="/auth/begin?shop=your-shop.myshopify.com">Install App</a>
+    <a href="/auth/begin?shop=example.myshopify.com">Install App</a>
   `);
 });
 
