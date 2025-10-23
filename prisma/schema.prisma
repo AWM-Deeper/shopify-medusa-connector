@@ -1,0 +1,68 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Store {
+  id          String   @id @default(uuid())
+  shopDomain  String   @unique
+  storeName   String?
+  email       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  tokens      Token[]
+  products    Product[]
+  
+  @@map("stores")
+}
+
+model Token {
+  id            String   @id @default(uuid())
+  storeId       String
+  accessToken   String   @db.Text
+  scope         String?
+  tokenType     String   @default("access_token")
+  expiresAt     DateTime?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  
+  @@map("tokens")
+  @@index([storeId])
+  @@index([isActive])
+}
+
+model Product {
+  id              String   @id @default(uuid())
+  storeId         String
+  shopifyId       String
+  title           String
+  description     String?  @db.Text
+  handle          String?
+  status          String?
+  vendor          String?
+  productType     String?
+  tags            String[]
+  images          Json?
+  variants        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  syncedAt        DateTime @default(now())
+  
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  
+  @@unique([storeId, shopifyId])
+  @@map("products")
+  @@index([storeId])
+  @@index([shopifyId])
+}
