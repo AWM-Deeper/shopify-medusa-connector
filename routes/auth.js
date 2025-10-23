@@ -1,18 +1,31 @@
 // routes/auth.js
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
+import logger from '../lib/logger.js';
+import { notifyCriticalFailure } from '../lib/notifications.js';
 
 export default function authRoutes(shopify, shopifyExpress) {
   const router = Router();
 
   router.get('/begin', async (req, res) => {
-    return shopifyExpress.beginAuth(req, res, req.query.shop, '/auth/callback');
+    try {
+      logger.info('OAuth flow started', { shop: req.query.shop });
+      return shopifyExpress.beginAuth(req, res, req.query.shop, '/auth/callback');
+    } catch (error) {
+      logger.error('Error starting OAuth flow', { error: error.message, stack: error.stack });
+      await notifyCriticalFailure(
+        'OAuth Flow Start Failed',
+        error.message,
+        { shop: req.query.shop, stack: error.stack }
+      );
+      res.status(500).send(`Error starting authentication: ${error.message}`);
+    }
   });
 
   router.get('/callback', async (req, res) => {
     try {
       const session = await shopifyExpress.validateAuthCallback(req, res, req.query);
-      console.log(`✅ Connected shop: ${session.shop}`);
+      logger.info('OAuth callback successful', { shop: session.shop });
       
       // Save or update store information
       const store = await prisma.store.upsert({
@@ -27,6 +40,8 @@ export default function authRoutes(shopify, shopifyExpress) {
           updatedAt: new Date(),
         },
       });
+      
+      logger.info('Store upserted', { storeId: store.id, shopDomain: store.shopDomain });
       
       // Deactivate any existing active tokens for this store
       await prisma.token.updateMany({
@@ -52,12 +67,23 @@ export default function authRoutes(shopify, shopifyExpress) {
         },
       });
       
-      console.log(`✅ Saved token for store: ${store.shopDomain}`);
+      logger.info('Access token saved', { storeId: store.id, tokenId: token.id });
       
       res.send(`🎉 Successfully connected ${session.shop}!`);
-    } catch (e) {
-      console.error('OAuth error:', e);
-      res.status(500).send(`Error: ${e.message}`);
+    } catch (error) {
+      logger.error('OAuth callback failed', { 
+        error: error.message, 
+        stack: error.stack,
+        query: req.query 
+      });
+      
+      await notifyCriticalFailure(
+        'OAuth Callback Failed',
+        error.message,
+        { query: req.query, stack: error.stack }
+      );
+      
+      res.status(500).send(`Error: ${error.message}`);
     }
   });
 
