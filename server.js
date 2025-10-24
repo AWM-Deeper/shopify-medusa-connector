@@ -37,7 +37,6 @@ app.get('/', (req, res) => {
  <head>
  <meta charset="utf-8">
  <meta name="viewport" content="width=device-width, initial-scale=1">
- <meta name='shopify-api-key' content='${process.env.SHOPIFY_API_KEY}'> <title>Shopify-Medusa Connector</title>
  <style>
  body { font-family: sans-serif; margin: 20px; }
  .container { max-width: 800px; margin: 0 auto; }
