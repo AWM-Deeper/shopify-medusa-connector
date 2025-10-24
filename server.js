@@ -1,11 +1,22 @@
 // server.js
 import 'dotenv/config';
 import express from 'express';
-import { shopifyApi, ApiVersion } from '@shopify/shopify-api';
+im
 import '@shopify/shopify-api/adapters/node';
-import cors from 'cors';
+imp
+// Allow Shopify admin and store domains to frame this app
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://myshopify.com");
+  res.setHeader('X-Frame-Options', 'ALLOWALL');
+  next();
+});ort cors from 'cors';
 import helmet from 'helmet';
-
+// Configure Helmet to allow embedding in Shopify iframe
+app.disable('x-powered-by');
+app.use(helmet({
+  contentSecurityPolicy: false,
+  frameguard: false,
+}));
 const app = express();
 
 // Security + parsing
