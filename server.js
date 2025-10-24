@@ -9,8 +9,8 @@ app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://myshopify.com");
   res.setHeader('X-Frame-Options', 'ALLOWALL');
   next();
-});ort cors from 'cors';
-import helmet from 'helmet';
+import cors from 'cors';
+  import helmet from 'helmet';
 // Configure Helmet to allow embedding in Shopify iframe
 app.disable('x-powered-by');
 app.use(helmet({
