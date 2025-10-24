@@ -26,15 +26,35 @@ const shopify = shopifyApi({
   scopes: process.env.SCOPES?.split(',') || [],
   hostName: process.env.HOST?.replace(/^https?:\/\//, '') || 'localhost:3000',
   apiVersion: ApiVersion.October24, // Use specific version
-  isEmbeddedApp: false,
+  isEmbeddedApp: true,
 });
 
 // Routes
 app.get('/', (req, res) => {
   res.send(`
-    ✅ Shopify-Medusa Connector
-    <a href="/auth/begin?shop=your-shop.myshopify.com">Install App</a>
-  `);
+ <!DOCTYPE html>
+ <html>
+ <head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <meta name="shopify-api-key" content="${process.env.SHOPIFY_API_KEY}">
+ <title>Shopify-Medusa Connector</title>
+ <style>
+ body { font-family: sans-serif; margin: 20px; }
+ .container { max-width: 800px; margin: 0 auto; }
+ h1 { color: #333; }
+ .status { padding: 10px; background: #e8f5e9; border-radius: 4px; margin: 10px 0; }
+ </style>
+ </head>
+ <body>
+ <div class="container">
+ <h1>✅ Shopify-Medusa Connector</h1>
+ <div class="status">App is connected and ready to sync products between Shopify and Medusa</div>
+ </div>
+ <script src="https://cdn.jsdelivr.net/npm/@shopify/app@latest/dist/index.js"><\/script>
+ </body>
+ </html>
+ `
 });
 
 // Auth routes
