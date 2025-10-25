@@ -1,32 +1,14 @@
-// server.js - Fixed
 import 'dotenv/config';
 import express from 'express';
-im
+import { shopifyApi, ApiVersion } from '@shopify/shopify-api';
 import '@shopify/shopify-api/adapters/node';
-imp
-// Allow Shopify admin and store domains to frame this app
-app.use((req, res, next) => {
-  res.setHeader('Content-Security-Policy', "frame-ancestors https://admin.shopify.com https://*.myshopify.com https://myshopify.com");
-  res.setHeader('X-Frame-Options', 'ALLOWALL');
-  next();
-import cors from 'cors';
-  import helmet from 'helmet';
-// Configure Helmet to allow embedding in Shopify iframe
-app.disable('x-powered-by');
-app.use(helmet({
-  contentSecurityPolicy: false,
-  frameguard: false,
-}));
+
 const app = express();
 
-// Security + parsing
-app.use(helmet());
-app.use(cors());
+// Middleware
 app.use(express.json());
-
-// Skip ngrok browser warning for OAuth 
 app.use((req, res, next) => {
-  res.setHeader('ngrok-skip-browser-warning', '69420');
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://admin.shopify.com https://*.myshopify.com");
   next();
 });
 
@@ -36,47 +18,37 @@ const shopify = shopifyApi({
   apiSecretKey: process.env.SHOPIFY_API_SECRET,
   scopes: process.env.SCOPES?.split(',') || [],
   hostName: process.env.HOST?.replace(/^https?:\/\//, '') || 'localhost:3000',
-  apiVersion: ApiVersion.October24, // Use specific version
+  apiVersion: ApiVersion.October24,
   isEmbeddedApp: true,
 });
 
-// Routes
+// Root route - embedded app
 app.get('/', (req, res) => {
   res.send(`
- <!DOCTYPE html>
- <html>
- <head>
- <meta charset="utf-8">
- <meta name="viewport" content="width=device-width, initial-scale=1">
- <style>
- body { font-family: sans-serif; margin: 20px; }
- .container { max-width: 800px; margin: 0 auto; }
- h1 { color: #333; }
- .status { padding: 10px; background: #e8f5e9; border-radius: 4px; margin: 10px 0; }
- </style>
- </head>
- <body>
- <div class="container">
- <h1>✅ Shopify-Medusa Connector</h1>
- <div class="status">App is connected and ready to sync products between Shopify and Medusa</div>
- </div>
- <script src="https://cdn.jsdelivr.net/npm/@shopify/app@latest/dist/index.js"><\/script>
- </body>
- </html>
- `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Shopify-Medusa Connector</title>
+      <style>body { font-family: sans-serif; margin: 20px; background: #f5f5f5; }</style>
+    </head>
+    <body>
+      <div style="max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px;">
+        <h1>✅ Shopify-Medusa Connector</h1>
+        <p>App is installed and connected to Medusa</p>
+        <p style="color: #666; font-size: 14px;">Ready to sync products and orders</p>
+      </div>
+    </body>
+    </html>
+  `);
 });
 
 // Auth routes
 app.get('/auth/begin', async (req, res) => {
   const shop = req.query.shop;
-  
-  if (!shop) {
-    return res.status(400).send('Missing shop parameter');
-  }
-
+  if (!shop) return res.status(400).send('Missing shop parameter');
   try {
-    // shopify.auth.begin() handles the redirect internally via rawResponse
-    // It does NOT return an authRoute - it sends the response itself
     await shopify.auth.begin({
       shop,
       callbackPath: '/auth/callback',
@@ -84,13 +56,9 @@ app.get('/auth/begin', async (req, res) => {
       rawRequest: req,
       rawResponse: res,
     });
-    // No res.redirect() needed - response already sent by shopify.auth.begin()
   } catch (error) {
     console.error('Auth begin error:', error);
-    // Only send error response if headers haven't been sent yet
-    if (!res.headersSent) {
-      res.status(500).send('Authentication failed');
-    }
+    if (!res.headersSent) res.status(500).send('Authentication failed');
   }
 });
 
@@ -100,19 +68,11 @@ app.get('/auth/callback', async (req, res) => {
       rawRequest: req,
       rawResponse: res,
     });
-    
     console.log('✅ Access token:', callback.session.accessToken);
-    
-    // Only send success response if headers haven't been sent yet
-    if (!res.headersSent) {
-      res.send('Authentication successful! You can close this window.');
-    }
+    if (!res.headersSent) res.send('Authentication successful!');
   } catch (error) {
     console.error('Auth callback error:', error);
-    // Only send error response if headers haven't been sent yet
-    if (!res.headersSent) {
-      res.status(500).send('Authentication callback failed');
-    }
+    if (!res.headersSent) res.status(500).send('Authentication failed');
   }
 });
 
