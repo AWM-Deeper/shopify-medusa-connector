@@ -1,5 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Prisma schema for Shopify-Medusa Connector
+// Database: PostgreSQL
 
 generator client {
   provider = "prisma-client-js"
@@ -11,29 +11,246 @@ datasource db {
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
+// Connected Shopify Store
 model Store {
-  id          String   @id @default(uuid())
-  shop        String   @unique
-  accessToken String
-  scope       String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  sessions    Session[]
+  id           String    @id @default(uuid())
+  shop         String    @unique // e.g., "store-name.myshopify.com"
+  accessToken  String    @db.Text // Encrypted at rest
+  scope        String?
+  pickupAddress String? // JSON: {address, city, zip, lat, lng}
+  email        String?
+  phone        String?
+  isActive     Boolean   @default(true)
+  
+  // Relations
+  products     Product[]
+  orders       Order[]
+  returns      Return[]
+  reviews      Review[]
+  sessions     Session[]
+  
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
+// OAuth Session
 model Session {
-  id          String   @id @default(uuid())
-  shop        String
-  state       String
-  isOnline    Boolean  @default(false)
-  scope       String?
-  expires     DateTime?
-  accessToken String?
-  userId      String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  store       Store?   @relation(fields: [shop], references: [shop])
-
+  id           String    @id @default(uuid())
+  shop         String
+  state        String
+  isOnline     Boolean   @default(false)
+  scope        String?
+  expires      DateTime?
+  accessToken  String?   @db.Text
+  userId       String?
+  
+  store        Store?    @relation(fields: [shop], references: [shop])
   @@index([shop])
+  
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+// Shopify -> Medusa Product Mapping
+model Product {
+  id               String    @id @default(uuid())
+  shopifyProductId String    // Shopify product ID
+  medusaProductId  String    // Medusa product ID (from SaaS)
+  storeName        String    // Which Shopify store
+  
+  store            Store     @relation(fields: [storeName], references: [shop], onDelete: Cascade)
+  variants         Variant[]
+  reviews          Review[]
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  
+  @@unique([shopifyProductId, storeName])
+  @@index([storeName])
+}
+
+// Shopify -> Medusa Variant Mapping
+model Variant {
+  id               String    @id @default(uuid())
+  shopifyVariantId String    // Shopify variant ID
+  medusaVariantId  String    // Medusa variant ID
+  shopifyProductId String
+  
+  product          Product   @relation(fields: [shopifyProductId], references: [shopifyProductId], onDelete: Cascade)
+  returns          Return[]
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  
+  @@unique([shopifyVariantId, shopifyProductId])
+  @@index([shopifyProductId])
+}
+
+// Orders from Medusa
+model Order {
+  id              String    @id @default(uuid())
+  medusaOrderId   String    @unique // From Medusa
+  storeId         String    // Which store fulfilled it
+  merchantShop    String    // Store that fulfilled
+  
+  customerId      String
+  customerEmail   String?
+  customerPhone   String?
+  
+  // Delivery info
+  stuartJobId     String?   // Links to Stuart delivery job
+  deliveryStatus  DeliveryStatus @default(PENDING)
+  deliveryQuote   Float?    // Quoted delivery price in currency units
+  
+  store           Store     @relation(fields: [merchantShop], references: [shop], onDelete: Cascade)
+  stuartJob       StuartJob? @relation(fields: [stuartJobId], references: [id])
+  returns         Return[]
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([merchantShop])
+  @@index([stuartJobId])
+}
+
+enum DeliveryStatus {
+  PENDING
+  CONFIRMED
+  DISPATCHED
+  DELIVERED
+  FAILED
+}
+
+// Return Requests
+model Return {
+  id              String    @id @default(uuid())
+  orderId         String
+  variantId       String
+  quantity        Int       @default(1)
+  
+  reason          String    // Return reason
+  status          ReturnStatus @default(REQUESTED)
+  merchantApproval Boolean  @default(false)
+  
+  // Logistics
+  stuartPickupJobId String? // Links to Stuart pickup job
+  pickupScheduledAt DateTime?
+  deliveredAt      DateTime?
+  
+  // Refund
+  refundStatus    RefundStatus @default(PENDING)
+  refundedAmount  Float?   // Amount refunded
+  refundedAt      DateTime?
+  
+  // Evidence
+  photoUrl        String?  // Photo evidence (S3 URL)
+  notes           String?  @db.Text
+  
+  customerEmail   String
+  customerPhone   String?
+  
+  order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant         Variant   @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  stuartJob       StuartJob? @relation(fields: [stuartPickupJobId], references: [id])
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([orderId])
+  @@index([variantId])
+}
+
+enum ReturnStatus {
+  REQUESTED      // Customer requested return
+  APPROVED       // Merchant approved
+  REJECTED       // Merchant rejected
+  PICKUP_SCHEDULED
+  PICKED_UP      // Stuart picked up
+  RECEIVED       // Merchant received
+  REFUNDED       // Refund processed
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// Stuart Delivery Jobs
+model StuartJob {
+  id          String    @id @default(uuid())
+  stuartJobId String    @unique // External Stuart API job ID
+  type        JobType   @default(DELIVERY) // DELIVERY or RETURN_PICKUP
+  
+  status      String    // From Stuart webhook
+  pickupAt    DateTime?
+  deliveryAt  DateTime?
+  
+  // Links
+  orders      Order[]
+  returns     Return[]
+  
+  rawData     String    @db.Text // Store full Stuart response
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([stuartJobId])
+}
+
+enum JobType {
+  DELIVERY
+  RETURN_PICKUP
+}
+
+// Product Reviews
+model Review {
+  id          String    @id @default(uuid())
+  orderId     String
+  variantId   String
+  storeName   String
+  
+  customerId  String
+  customerEmail String?
+  
+  rating      Int       @default(5) // 1-5 stars
+  comment     String?   @db.Text
+  verified    Boolean   @default(true) // Verified purchase
+  
+  store       Store     @relation(fields: [storeName], references: [shop], onDelete: Cascade)
+  product     Product   @relation(fields: [variantId], references: [shopifyProductId], onDelete: Cascade)
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([storeName])
+  @@index([variantId])
+}
+
+// Webhook Events Log (for debugging)
+model WebhookLog {
+  id        String    @id @default(uuid())
+  source    String    // "shopify", "medusa", "stuart"
+  event     String    // Event type
+  payload   String    @db.Text // Raw payload
+  processed Boolean   @default(false)
+  error     String?   // Error message if failed
+  
+  createdAt DateTime  @default(now())
+}
+
+// Sync Status Tracking
+model SyncStatus {
+  id           String    @id @default(uuid())
+  storeName    String
+  resourceType String    // "products", "inventory", "orders"
+  lastSyncAt   DateTime?
+  status       String    // "pending", "syncing", "completed", "failed"
+  errorMessage String?
+  
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  
+  @@unique([storeName, resourceType])
 }
