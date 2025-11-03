@@ -116,6 +116,7 @@ model Return {
   id              String    @id @default(uuid())
   orderId         String
   variantId       String
+  storeId         String
   quantity        Int       @default(1)
   
   reason          String    // Return reason
@@ -141,6 +142,7 @@ model Return {
   
   order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   variant         Variant   @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
   stuartJob       StuartJob? @relation(fields: [stuartPickupJobId], references: [id])
   
   createdAt       DateTime  @default(now())
@@ -148,6 +150,7 @@ model Return {
   
   @@index([orderId])
   @@index([variantId])
+  @@index([storeId])
 }
 enum ReturnStatus {
   REQUESTED      // Customer requested return
