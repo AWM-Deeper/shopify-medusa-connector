@@ -1,16 +1,13 @@
 // Prisma schema for Shopify-Medusa Connector
 // Database: PostgreSQL
-
 generator client {
   provider = "prisma-client-js"
 }
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
-
 // Connected Shopify Store
 model Store {
   id           String    @id @default(uuid())
@@ -32,7 +29,6 @@ model Store {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
-
 // OAuth Session
 model Session {
   id           String    @id @default(uuid())
@@ -50,11 +46,10 @@ model Session {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
-
 // Shopify -> Medusa Product Mapping
 model Product {
   id               String    @id @default(uuid())
-  shopifyProductId String    // Shopify product ID
+  shopifyProductId String    @unique // Shopify product ID
   medusaProductId  String    // Medusa product ID (from SaaS)
   storeName        String    // Which Shopify store
   
@@ -65,10 +60,8 @@ model Product {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
   
-  @@unique([shopifyProductId, storeName])
   @@index([storeName])
 }
-
 // Shopify -> Medusa Variant Mapping
 model Variant {
   id               String    @id @default(uuid())
@@ -85,7 +78,6 @@ model Variant {
   @@unique([shopifyVariantId, shopifyProductId])
   @@index([shopifyProductId])
 }
-
 // Orders from Medusa
 model Order {
   id              String    @id @default(uuid())
@@ -112,7 +104,6 @@ model Order {
   @@index([merchantShop])
   @@index([stuartJobId])
 }
-
 enum DeliveryStatus {
   PENDING
   CONFIRMED
@@ -120,7 +111,6 @@ enum DeliveryStatus {
   DELIVERED
   FAILED
 }
-
 // Return Requests
 model Return {
   id              String    @id @default(uuid())
@@ -159,7 +149,6 @@ model Return {
   @@index([orderId])
   @@index([variantId])
 }
-
 enum ReturnStatus {
   REQUESTED      // Customer requested return
   APPROVED       // Merchant approved
@@ -169,14 +158,12 @@ enum ReturnStatus {
   RECEIVED       // Merchant received
   REFUNDED       // Refund processed
 }
-
 enum RefundStatus {
   PENDING
   PROCESSING
   COMPLETED
   FAILED
 }
-
 // Stuart Delivery Jobs
 model StuartJob {
   id          String    @id @default(uuid())
@@ -198,17 +185,15 @@ model StuartJob {
   
   @@index([stuartJobId])
 }
-
 enum JobType {
   DELIVERY
   RETURN_PICKUP
 }
-
 // Product Reviews
 model Review {
   id          String    @id @default(uuid())
   orderId     String
-  variantId   String
+  shopifyProductId   String
   storeName   String
   
   customerId  String
@@ -219,15 +204,14 @@ model Review {
   verified    Boolean   @default(true) // Verified purchase
   
   store       Store     @relation(fields: [storeName], references: [shop], onDelete: Cascade)
-  product     Product   @relation(fields: [variantId], references: [shopifyProductId], onDelete: Cascade)
+  product     Product   @relation(fields: [shopifyProductId], references: [shopifyProductId], onDelete: Cascade)
   
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   
   @@index([storeName])
-  @@index([variantId])
+  @@index([shopifyProductId])
 }
-
 // Webhook Events Log (for debugging)
 model WebhookLog {
   id        String    @id @default(uuid())
@@ -239,7 +223,6 @@ model WebhookLog {
   
   createdAt DateTime  @default(now())
 }
-
 // Sync Status Tracking
 model SyncStatus {
   id           String    @id @default(uuid())
