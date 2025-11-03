@@ -1,20 +1,22 @@
 // server.js
 import 'dotenv/config';
 import express from 'express';
-import { shopifyApi, ApiVersion, LATEST_API_VERSION } from '@shopify/shopify-api';
+import { shopifyApi, ApiVersion } from '@shopify/shopify-api';
 import '@shopify/shopify-api/adapters/node';
 import cors from 'cors';
 import helmet from 'helmet';
-import cookieParser from 'cookie-parser'; // FIXED: Added cookie support
+import cookieParser from 'cookie-parser';
 
+// FIXED: Added cookie support
 const app = express();
 
 // Security + parsing
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.use(express.json());
-app.use(cookieParser()); // FIXED: Enable cookies for OAuth
+app.use(cookieParser());
 
+// FIXED: Enable cookies for OAuth
 // Skip ngrok browser warning
 app.use((req, res, next) => {
   res.setHeader('ngrok-skip-browser-warning', '69420');
@@ -23,7 +25,7 @@ app.use((req, res, next) => {
 
 // Validate required environment variables
 if (!process.env.SHOPIFY_API_KEY || !process.env.SHOPIFY_API_SECRET || !process.env.HOST) {
-  console.error('\u274c Missing required environment variables!');
+  console.error('❌ Missing required environment variables!');
   console.error('Required: SHOPIFY_API_KEY, SHOPIFY_API_SECRET, HOST');
   process.exit(1);
 }
@@ -32,13 +34,20 @@ if (!process.env.SHOPIFY_API_KEY || !process.env.SHOPIFY_API_SECRET || !process.
 const shopify = shopifyApi({
   apiKey: process.env.SHOPIFY_API_KEY,
   apiSecretKey: process.env.SHOPIFY_API_SECRET,
-  scopes: process.env.SCOPES?.split(',') || ['read_products', 'write_products', 'read_inventory', 'write_inventory', 'read_locations', 'read_orders'],
+  scopes: process.env.SCOPES?.split(',') || [
+    'read_products',
+    'write_products',
+    'read_inventory',
+    'write_inventory',
+    'read_locations',
+    'read_orders'
+  ],
   // FIXED: Remove protocol and trailing slash
   hostName: process.env.HOST
-    .replace(/^https?:\/\//, '')
+    .replace(/^https?:\/\//,'')
     .replace(/\/$/, ''),
   hostScheme: 'https',
-  apiVersion: LATEST_API_VERSION,
+  apiVersion: '2024-10',
   isEmbeddedApp: false,
   auth: {
     path: '/auth',
@@ -50,53 +59,41 @@ const shopify = shopifyApi({
 app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
-    <html>
-    <head><title>Shopify-Medusa Connector</title></head>
-    <body>
+
+    <title>Shopify-Medusa Connector</title>
       <h1>✅ Shopify-Medusa Connector</h1>
       <p>Server is running correctly!</p>
-      <p><strong>To install:</strong> Visit <code>/auth/begin?shop=YOUR-STORE.myshopify.com</code></p>
-      <hr>
-      <p>Environment check:</p>
+      <p>To install: Visit /auth/begin?shop=YOUR-STORE.myshopify.com</p>
+      <h3>Environment check:</h3>
       <ul>
         <li>API Key: ${process.env.SHOPIFY_API_KEY ? '✅ Set' : '❌ Missing'}</li>
         <li>API Secret: ${process.env.SHOPIFY_API_SECRET ? '✅ Set' : '❌ Missing'}</li>
         <li>Host: ${process.env.HOST || '❌ Missing'}</li>
         <li>Scopes: ${process.env.SCOPES || 'read_products,write_products (default)'}</li>
       </ul>
-    </body>
-    </html>
+    <br>
   `);
 });
 
 // FIXED: Proper async/await handling in /auth/begin
 app.get('/auth/begin', async (req, res) => {
   const { shop } = req.query;
-  
+
   if (!shop) {
-    return res.status(400).send('❌ Missing shop parameter. Use: /auth/begin?shop=your-store.myshopify.com');
+    res.status(400).send('❌ Missing shop parameter');
+    return;
   }
-  
-  if (!shop.includes('.myshopify.com')) {
-    return res.status(400).send('❌ Invalid shop format. Must be: your-store.myshopify.com');
-  }
-  
+
   try {
-    console.log(`🔐 Starting OAuth for shop: ${shop}`);
-    
-    // shopify.auth.begin handles the redirect internally
-    await shopify.auth.begin({
-      shop: shopify.utils.sanitizeShop(shop, true),
-      callbackPath: '/auth/callback',
-      isOnline: false,
+    console.log(`📱 Starting OAuth for: ${shop}`);
+    return await shopify.auth.begin({
       rawRequest: req,
       rawResponse: res,
+      shop: shop,
     });
-    // Note: No need for res.redirect() - shopify.auth.begin handles it
   } catch (error) {
     console.error('❌ Auth begin error:', error.message);
-    console.error('Full error:', error);
-    res.status(500).send(`Authentication failed: ${error.message}`);
+    res.status(500).send(`Auth begin failed: ${error.message}`);
   }
 });
 
@@ -104,37 +101,34 @@ app.get('/auth/begin', async (req, res) => {
 app.get('/auth/callback', async (req, res) => {
   try {
     console.log('📥 Received OAuth callback');
-    
+
     const callbackResponse = await shopify.auth.callback({
       rawRequest: req,
       rawResponse: res,
     });
-    
+
     const { session } = callbackResponse;
-    
+
     console.log('✅ Authentication successful!');
     console.log('Shop:', session.shop);
     console.log('Access Token:', session.accessToken?.substring(0, 20) + '...');
     console.log('Scope:', session.scope);
-    
+
     // TODO: Store session in database
     // await storeSession(session);
-    
+
     // TODO: Sync with Medusa
     // await syncToMedusa(session);
-    
+
     res.send(`
       <!DOCTYPE html>
-      <html>
-      <head><title>Success!</title></head>
-      <body>
+
+      <title>Success!</title>
         <h1>✅ Authentication Successful!</h1>
-        <p>Shop: <strong>${session.shop}</strong></p>
+        <p><strong>Shop: ${session.shop}</strong></p>
         <p>You can close this window.</p>
-        <hr>
-        <p><small>Access token stored. Ready to sync with Medusa.</small></p>
-      </body>
-      </html>
+        <p>Access token stored. Ready to sync with Medusa.</p>
+      <br>
     `);
   } catch (error) {
     console.error('❌ Auth callback error:', error.message);
